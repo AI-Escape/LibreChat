@@ -390,7 +390,51 @@ export function findLastSeparatorIndex(text: string, separators = SEPARATORS): n
   return lastIndex;
 }
 
-export function replaceSpecialVars({ text, user }: { text: string; user?: t.TUser | null }) {
+/**
+ * Represents file information for template variable replacement
+ */
+export type AttachedFileInfo = {
+  /** Original filename */
+  filename: string;
+  /** Web-accessible filepath (e.g., /images/userId/file.png) */
+  filepath: string;
+  /** Absolute system path to the file */
+  absolutePath?: string;
+  /** File MIME type */
+  type?: string;
+  /** File source (local, s3, firebase, etc.) */
+  source?: string;
+  /** Image width if applicable */
+  width?: number;
+  /** Image height if applicable */
+  height?: number;
+};
+
+/**
+ * Replaces special template variables in text with their values.
+ *
+ * Supported template variables:
+ * - {{current_date}} - Current date in YYYY-MM-DD format with day number (e.g., "2024-04-29 (1)")
+ * - {{current_datetime}} - Current datetime in YYYY-MM-DD HH:mm:ss format with day number
+ * - {{iso_datetime}} - Current datetime in ISO 8601 format
+ * - {{current_user}} - Current user's name
+ * - {{attached_files}} - JSON array of attached file information including absolute system paths
+ *
+ * @param params - Parameters for variable replacement
+ * @param params.text - The text containing template variables to replace
+ * @param params.user - Optional user object for user-related variables
+ * @param params.files - Optional array of attached file information
+ * @returns The text with all template variables replaced
+ */
+export function replaceSpecialVars({
+  text,
+  user,
+  files,
+}: {
+  text: string;
+  user?: t.TUser | null;
+  files?: AttachedFileInfo[];
+}) {
   let result = text;
   if (!result) {
     return result;
@@ -410,6 +454,27 @@ export function replaceSpecialVars({ text, user }: { text: string; user?: t.TUse
 
   if (user && user.name) {
     result = result.replace(/{{current_user}}/gi, user.name);
+  }
+
+  // Replace {{attached_files}} with JSON array of file information
+  if (files && files.length > 0) {
+    const filesJson = JSON.stringify(
+      files.map((file) => ({
+        filename: file.filename,
+        filepath: file.filepath,
+        absolutePath: file.absolutePath,
+        type: file.type,
+        source: file.source,
+        width: file.width,
+        height: file.height,
+      })),
+      null,
+      2,
+    );
+    result = result.replace(/{{attached_files}}/gi, filesJson);
+  } else {
+    // If no files attached, replace with empty array
+    result = result.replace(/{{attached_files}}/gi, '[]');
   }
 
   return result;

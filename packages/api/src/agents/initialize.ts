@@ -1,6 +1,8 @@
+import path from 'path';
 import { Providers } from '@librechat/agents';
 import {
   ErrorTypes,
+  FileSources,
   EModelEndpoint,
   EToolResources,
   paramEndpoints,
@@ -11,6 +13,7 @@ import {
 import type {
   AgentToolResources,
   TEndpointOption,
+  AttachedFileInfo,
   TFile,
   Agent,
   TUser,
@@ -89,6 +92,59 @@ export interface InitializeAgentDbMethods extends EndpointDbMethods {
   getToolFilesByIds: (fileIds: string[], toolSet: Set<EToolResources>) => Promise<unknown[]>;
   /** Get conversation file IDs */
   getConvoFiles: (conversationId: string) => Promise<string[] | null>;
+}
+
+/**
+ * Converts file attachments to AttachedFileInfo array with absolute system paths.
+ * For local files, computes the absolute path based on the configured paths.
+ * For cloud storage (S3, Firebase, Azure), the absolutePath will be undefined.
+ *
+ * @param files - Array of file objects from attachments
+ * @param paths - Application paths configuration
+ * @returns Array of AttachedFileInfo objects with absolute paths for local files
+ */
+function createAttachedFileInfos(
+  files: Array<TFile | undefined> | undefined,
+  paths?: { uploads?: string; imageOutput?: string; publicPath?: string },
+): AttachedFileInfo[] {
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    return [];
+  }
+
+  return files
+    .filter((file): file is TFile => file != null)
+    .map((file): AttachedFileInfo => {
+      let absolutePath: string | undefined;
+
+      // Only compute absolute path for local files
+      if (file.source === FileSources.local && paths) {
+        const filepath = file.filepath;
+
+        if (filepath.includes('/uploads/') && paths.uploads) {
+          // Extract the relative path after /uploads/ and join with uploads directory
+          const relativePath = filepath.split('/uploads/')[1];
+          if (relativePath) {
+            absolutePath = path.join(paths.uploads, relativePath);
+          }
+        } else if (filepath.includes('/images/') && paths.imageOutput) {
+          // Extract the relative path after /images/ and join with imageOutput directory
+          const relativePath = filepath.split('/images/')[1];
+          if (relativePath) {
+            absolutePath = path.join(paths.imageOutput, relativePath);
+          }
+        }
+      }
+
+      return {
+        filename: file.filename,
+        filepath: file.filepath,
+        absolutePath,
+        type: file.type,
+        source: file.source,
+        width: file.width,
+        height: file.height,
+      };
+    });
 }
 
 /**
@@ -279,9 +335,13 @@ export async function initializeAgent(
   }
 
   if (agent.instructions && agent.instructions !== '') {
+    // Convert attachments to AttachedFileInfo with absolute paths for local files
+    const attachedFileInfos = createAttachedFileInfos(primedAttachments, req.config?.paths);
+
     agent.instructions = replaceSpecialVars({
       text: agent.instructions,
       user: req.user ? (req.user as unknown as TUser) : null,
+      files: attachedFileInfos,
     });
   }
 

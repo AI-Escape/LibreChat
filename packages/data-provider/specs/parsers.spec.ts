@@ -1,6 +1,8 @@
 import { replaceSpecialVars, parseCompactConvo } from '../src/parsers';
+import type { AttachedFileInfo } from '../src/parsers';
 import { specialVariables } from '../src/config';
 import { EModelEndpoint } from '../src/schemas';
+import { FileSources } from '../src/types/files';
 import type { TUser, TConversation } from '../src/types';
 
 // Mock dayjs module with consistent date/time values regardless of environment
@@ -122,6 +124,120 @@ describe('replaceSpecialVars', () => {
     expect(result).toContain('2024-04-29 12:34:56 (1)'); // current_datetime
     expect(result).toContain('2024-04-29T16:34:56.000Z'); // iso_datetime
     expect(result).toContain('Test User'); // current_user
+  });
+
+  describe('{{attached_files}} variable', () => {
+    test('should replace {{attached_files}} with empty array when no files provided', () => {
+      const result = replaceSpecialVars({
+        text: 'Files: {{attached_files}}',
+      });
+      expect(result).toBe('Files: []');
+    });
+
+    test('should replace {{attached_files}} with empty array when files is empty', () => {
+      const result = replaceSpecialVars({
+        text: 'Files: {{attached_files}}',
+        files: [],
+      });
+      expect(result).toBe('Files: []');
+    });
+
+    test('should replace {{attached_files}} with JSON array of file info', () => {
+      const mockFiles: AttachedFileInfo[] = [
+        {
+          filename: 'test-image.png',
+          filepath: '/images/user123/abc123__test-image.png',
+          absolutePath: '/app/client/public/images/user123/abc123__test-image.png',
+          type: 'image/png',
+          source: FileSources.local,
+          width: 800,
+          height: 600,
+        },
+      ];
+
+      const result = replaceSpecialVars({
+        text: 'Files: {{attached_files}}',
+        files: mockFiles,
+      });
+
+      const parsed = JSON.parse(result.replace('Files: ', ''));
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].filename).toBe('test-image.png');
+      expect(parsed[0].absolutePath).toBe('/app/client/public/images/user123/abc123__test-image.png');
+      expect(parsed[0].type).toBe('image/png');
+      expect(parsed[0].width).toBe(800);
+      expect(parsed[0].height).toBe(600);
+    });
+
+    test('should handle multiple files in {{attached_files}}', () => {
+      const mockFiles: AttachedFileInfo[] = [
+        {
+          filename: 'image1.png',
+          filepath: '/images/user123/file1.png',
+          absolutePath: '/app/images/file1.png',
+          type: 'image/png',
+          source: FileSources.local,
+        },
+        {
+          filename: 'document.pdf',
+          filepath: '/uploads/user123/doc.pdf',
+          absolutePath: '/app/uploads/doc.pdf',
+          type: 'application/pdf',
+          source: FileSources.local,
+        },
+      ];
+
+      const result = replaceSpecialVars({
+        text: 'Attached: {{attached_files}}',
+        files: mockFiles,
+      });
+
+      const parsed = JSON.parse(result.replace('Attached: ', ''));
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0].filename).toBe('image1.png');
+      expect(parsed[1].filename).toBe('document.pdf');
+    });
+
+    test('should handle files without absolutePath (cloud storage)', () => {
+      const mockFiles: AttachedFileInfo[] = [
+        {
+          filename: 's3-image.jpg',
+          filepath: 'https://bucket.s3.amazonaws.com/images/file.jpg',
+          type: 'image/jpeg',
+          source: FileSources.s3,
+        },
+      ];
+
+      const result = replaceSpecialVars({
+        text: '{{attached_files}}',
+        files: mockFiles,
+      });
+
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].filename).toBe('s3-image.jpg');
+      expect(parsed[0].absolutePath).toBeUndefined();
+      expect(parsed[0].source).toBe('s3');
+    });
+
+    test('should be case-insensitive for {{attached_files}}', () => {
+      const mockFiles: AttachedFileInfo[] = [
+        {
+          filename: 'test.png',
+          filepath: '/images/test.png',
+          type: 'image/png',
+          source: FileSources.local,
+        },
+      ];
+
+      const result = replaceSpecialVars({
+        text: '{{ATTACHED_FILES}}',
+        files: mockFiles,
+      });
+
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveLength(1);
+    });
   });
 });
 
