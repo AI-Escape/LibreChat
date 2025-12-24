@@ -14,6 +14,7 @@ export default function ConvoIcon({
   containerClassName = '',
   context,
   size,
+  isRunning = false,
 }: {
   conversation: t.TConversation | t.TPreset | null;
   endpointsConfig: t.TEndpointsConfig;
@@ -23,6 +24,7 @@ export default function ConvoIcon({
   context?: 'message' | 'nav' | 'landing' | 'menu-item';
   className?: string;
   size?: number;
+  isRunning?: boolean;
 }) {
   const iconURL = conversation?.iconURL ?? '';
   let endpoint = conversation?.endpoint;
@@ -52,18 +54,30 @@ export default function ConvoIcon({
   return (
     <>
       {iconURL && iconURL.includes('http') ? (
-        <ConvoIconURL
-          iconURL={iconURL}
-          modelLabel={conversation?.chatGptLabel ?? conversation?.modelLabel ?? ''}
-          endpointIconURL={endpointIconURL}
-          assistantAvatar={avatar}
-          assistantName={name}
-          agentAvatar={avatar}
-          agentName={name}
-          context={context}
-        />
+
+      <div className={`relative inline-flex ${containerClassName}`}>
+        <div className={isRunning ? 'opacity-60 grayscale' : ''}>
+          <ConvoIconURL
+            iconURL={iconURL}
+            modelLabel={conversation?.chatGptLabel ?? conversation?.modelLabel ?? ''}
+            endpointIconURL={endpointIconURL}
+            assistantAvatar={avatar}
+            assistantName={name}
+            agentAvatar={avatar}
+            agentName={name}
+            context={context}
+          />
+        </div>
+        {isRunning && (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="h-full w-full rounded-full bg-black/10" />
+            <span className="absolute h-4 w-4 animate-spin rounded-full border-2 border-white/80 border-t-transparent" />
+          </span>
+        )}
+        </div>
       ) : (
-        <div className={containerClassName}>
+        <div className={`relative inline-flex ${containerClassName}`}>
+          <div className={isRunning ? 'opacity-60 grayscale' : ''}>
           {endpoint && Icon != null && (
             <Icon
               size={size}
@@ -76,6 +90,13 @@ export default function ConvoIcon({
               avatar={avatar}
             />
           )}
+          </div>
+          {isRunning && (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="h-full w-full rounded-full bg-black/10" />
+              <span className="absolute h-4 w-4 animate-spin rounded-full border-2 border-white/80 border-t-transparent" />
+            </span>
+            )}
         </div>
       )}
     </>

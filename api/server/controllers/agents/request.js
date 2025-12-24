@@ -182,8 +182,57 @@ const AgentController = async (req, res, next, initializeClient, addTitle) => {
     };
 
     const { abortController, onStart } = createAbortController(req, res, getAbortData, getReqData);
-    const closeHandler = createCloseHandler(abortController);
+    
+    
+    // Helper to detach response so the run can continue in the background
+    // after the client disconnects. Prevents writes from throwing.
+    const detachResponse = () => {
+      try {
+        // Mark as detached; avoid double-detach
+        if (res.__detached === true) {
+          return;
+        }
+        res.__detached = true;
+        // No-op network methods to prevent write-after-close errors
+        res.write = function () {};
+        res.end = function () {};
+        if (typeof res.flushHeaders === 'function') {
+          res.flushHeaders = function () {};
+        }
+      } catch (e) {
+        logger.error('[AgentController] Error detaching response', e);
+      }
+    };
+
+    // Simple handler to avoid capturing scope
+    const closeHandler = () => {
+      logger.debug('[AgentController] Request closed');
+      if (!abortController) {
+        return;
+      } else if (abortController.signal.aborted) {
+        return;
+      } else if (abortController.requestCompleted) {
+        return;
+      }
+
+      // Allow runs to continue when client disconnects if requested
+      const continueOnDisconnect =
+        req?.body?.continueOnDisconnect !== undefined
+          ? !!req.body.continueOnDisconnect
+          : true; // default to true for agents
+
+      if (continueOnDisconnect) {
+        detachResponse();
+        logger.debug('[AgentController] Continuing run after client disconnect');
+        return;
+      }
+
+      abortController.abort();
+      logger.debug('[AgentController] Request aborted on close');
+    };
+
     res.on('close', closeHandler);
+
     cleanupHandlers.push(() => {
       try {
         res.removeListener('close', closeHandler);

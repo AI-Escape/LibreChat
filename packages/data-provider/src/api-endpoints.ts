@@ -210,6 +210,7 @@ export const assistants = ({
 
   return url;
 };
+export const agentRunStatus = (conversationId: string) => `${agents({ path: `status/${conversationId}` })}`;
 
 export const agents = ({ path = '', options }: { path?: string; options?: object }) => {
   let url = `${BASE_URL}/api/agents`;

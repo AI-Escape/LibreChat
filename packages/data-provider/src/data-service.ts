@@ -466,6 +466,9 @@ export const duplicateAgent = ({
     }),
   );
 };
+export const getAgentRunStatus = (conversationId: string): Promise<{ running: boolean }> => {
+  return request.get(endpoints.agentRunStatus(conversationId));
+};
 
 export const deleteAgent = ({ agent_id }: m.DeleteAgentBody): Promise<void> => {
   return request.delete(
